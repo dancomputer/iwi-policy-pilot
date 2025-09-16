@@ -8,4 +8,9 @@ Data are stored on my local computer.
    - **Date created:**
    - **Date updated:**
    - **Context:** Contains the pixel/latlon pairs needed to match villages with pixels
-    
+
+- **File:** `Worked_Locations - Highlands Zone_Final.xlsx`
+  - **Description:** Worked locations, containing columns: `Village`, `Region`, `District`, `Ward`, `Latitude`, `Longitude`, `Pixel_ID`, `Farmer_Name`, `Notes`. The file contains approximately 2900 rows.  
+   - **Date created:**
+   - **Date updated:**
+   - **Context:** Contains the village/latlon pairs needed to match pixels with villages
