@@ -10,10 +10,10 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
     # Read the data files
     highlands_df = pd.read_excel(highlands_file)
     metadata_df = pd.read_csv(metadata_file)
-    
-    # Get all village locations
-    all_locations = highlands_df[['Village', 'Region', 'District', 'Latitude', 'Longitude']].dropna() 
-    
+
+    # Get all locations
+    all_locations = highlands_df[['Village', 'Region', 'District', 'Latitude', 'Longitude']].dropna()
+
     results = []
     
     for _, location_row in all_locations.iterrows():
@@ -24,8 +24,8 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
         village_lon = location_row['Longitude']
         
         # Count farmers at this location
-        farmer_count = len(highlands_df[(highlands_df['Latitude'] == village_lat) & 
-                                       (highlands_df['Longitude'] == village_lon)])
+        farmer_count = highlands_df[(highlands_df['Latitude'] == village_lat) & 
+                                       (highlands_df['Longitude'] == village_lon)]["Farming_Size"]
         
         # Calculate distances to all pixels
         distances = []
@@ -59,7 +59,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
 # Run the matching
 result = match_villages_to_pixels(
     r'.\data\Worked_Locations - Highlands Zone_Final.xlsx',
-    r'.\data\metadata.csv',
+    r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_MgtRiz_highfert_1982_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
     r'.\data\village_pixel_matches.csv'
 )
 
