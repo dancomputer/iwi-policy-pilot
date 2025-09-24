@@ -45,7 +45,7 @@ def get_worked_locations_mask(locations_file, lat_coords, lon_coords, grid_step=
     
     # Create a mask array (False = empty, True = has worked location)
     mask = np.zeros((len(lat_coords), len(lon_coords)), dtype=bool)
-    
+
     for _, row in df.iterrows():
         lat, lon = row['Latitude'], row['Longitude']
         
@@ -330,9 +330,26 @@ def create_sparse_arrays(locations_file, input_folder, output_folder, grid_step=
 
 # Run the script
 if __name__ == "__main__":
-    locations_file = r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\Worked_Locations - Highlands Zone_Final.xlsx"
-    input_folder = r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\Data_MgtRiz_highfert_1982_2022"
-    output_folder = r"./Data_MgtRiz_highfert_1982_2022_SPARSE"
-    
+    locations_file = r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\NKASI - MAIZE - revised 2025.xlsx"
+    input_folder = r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\Data_Maize_1981_2022"
+    output_folder = r"./Data_Maize_1981_2022_SPARSE"
+    # If Latitude/Longitude columns are missing, try to create them from 'GPS Coordinates' (formatted "Lat,Lon")
+    df = pd.read_excel(locations_file)
+    if 'Latitude' not in df.columns or 'Longitude' not in df.columns:
+        if 'GPS Coordinates' in df.columns:
+            coords = df['GPS Coordinates'].astype(str)
+            lat_vals = pd.to_numeric(coords.str.split(',', n=1).str[0].str.strip(), errors='coerce')
+            lon_vals = pd.to_numeric(coords.str.split(',', n=1).str[1].str.strip(), errors='coerce')
+            if 'Latitude' not in df.columns:
+                df['Latitude'] = lat_vals
+            if 'Longitude' not in df.columns:
+                df['Longitude'] = lon_vals
+        else:
+            # create empty numeric columns if nothing to parse
+            if 'Latitude' not in df.columns:
+                df['Latitude'] = np.nan
+            if 'Longitude' not in df.columns:
+                df['Longitude'] = np.nan
+    df.to_excel(locations_file, index=False)
     #[Note: I haven't looked into compression. The LLM (I believe o4-mini worked the best, but it didnt comment much, so I used gemeni to add comments/readability and printouts.) says this is 'maximum compression' and it works quite well for the moment in reducing file size by ~20-40x.] Use maximum compression (level 9) for best file size reduction
     create_sparse_arrays(locations_file, input_folder, output_folder, grid_step=0.1, compression_level=9)

@@ -24,8 +24,8 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
         village_lon = location_row['Longitude']
         
         # Count farmers at this location
-        farmer_count = highlands_df[(highlands_df['Latitude'] == village_lat) & 
-                                       (highlands_df['Longitude'] == village_lon)]["Farming_Size"]
+        #farmer_count = highlands_df[(highlands_df['Latitude'] == village_lat) & 
+        #                               (highlands_df['Longitude'] == village_lon)]["Farming_Size"]
         
         # Calculate distances to all pixels
         distances = []
@@ -41,7 +41,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
         closest_pixel = metadata_df.iloc[min_distance_idx]['pixel']
         
         results.append({
-            'Farmer_Count': farmer_count,
+           # 'Farmer_Count': farmer_count,
             'Region': village_region,
             'District': village_district,
             'Village': village_name,
@@ -57,11 +57,13 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
     return output_df
 
 # Run the matching
+ 
 result = match_villages_to_pixels(
-    r'.\data\Worked_Locations - Highlands Zone_Final.xlsx',
-    r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_MgtRiz_highfert_1982_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
-    r'.\data\village_pixel_matches.csv'
+    r'C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\NKASI - MAIZE - revised 2025.xlsx',
+    r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
+    r'.\data\village_pixel_matches_maize-nkasi.csv'
 )
+
 
 print(f"Matched {len(result)} unique villages to pixels")
 print(result.head())

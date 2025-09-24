@@ -10,7 +10,15 @@ Data are stored on my local computer.
    - **Context:** Contains the pixel/latlon pairs needed to match villages with pixels
 
 - **File:** `Worked_Locations - Highlands Zone_Final.xlsx`
-  - **Description:** Worked locations, containing columns: `Village`, `Region`, `District`, `Ward`, `Latitude`, `Longitude`, `Pixel_ID`, `Farmer_Name`, `Notes`. The file contains approximately 2900 rows.  
+  - **Description:** Worked locations, containing columns: `Village`, `Region`, `District`, `Ward`, `Latitude`, `Longitude`, `Pixel_ID`, `Farmer_Name`, `Notes`. The file contains approximately 2900 rows. For Rice.  
    - **Date created:**
    - **Date updated:**
    - **Context:** Contains the village/latlon pairs needed to match pixels with villages
+
+   - **File:** `NKASI - MAIZE -revised 2025.xls`
+  - **Description:** Worked locations, containing columns: `Village`, `Region`,`GPS Coordinates`; for Maize.
+   - **Date created:**
+   - **Date updated:**
+   - **Context:** Contains the village/latlon pairs needed to match pixels with villages
+
+   
