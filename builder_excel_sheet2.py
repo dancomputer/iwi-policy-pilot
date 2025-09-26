@@ -49,7 +49,7 @@ def autosize_columns(ws, col_start: int, col_end: int, min_width: int = 8, max_w
 def ws_title_is_default(title: str) -> bool:
     return str(title).lower().startswith("sheet")
 
-def build_payouts_percent_sheet(
+def build_excel_sheet2(
     df: pd.DataFrame,
     wb: Optional[Workbook] = None,
     sheet_name: str = "2. Payouts %"
@@ -101,8 +101,8 @@ def build_payouts_percent_sheet(
     wb = wb or Workbook()
     ws = wb.active if (wb.active and wb.active.max_row == 1 and ws_title_is_default(wb.active.title)) else wb.create_sheet()
     ws.title = sheet_name
-    # Freeze first five columns (A–E)
-    ws.freeze_panes = ws.cell(row=1, column=6)  # 'F1'
+    # Freeze first five columns (A–E) and top 10 rows (metadata)
+    ws.freeze_panes = ws.cell(row=11, column=6)  # 'F11'
 
     bold = Font(bold=True)
     center = Alignment(horizontal="center")
@@ -134,7 +134,12 @@ def build_payouts_percent_sheet(
     ws.cell(row=row_title, column=col_label).value = "PAYOUTS % (fraction of sum insured)"
     ws.cell(row=row_title, column=col_label).font = bold
     ws.cell(row=row_title, column=col_label).alignment = left
-
+    #Fill title cell with yellow
+    hx = "FFFF00"
+    cell = ws.cell(row=row_title, column=col_label)
+    cell.fill = to_fill(hx)
+    
+    # Metadata rows
     # Row: Pixel count
     ws.cell(row=row_meta_start + 0, column=col_label).value = "Pixel count"
     for j, _pix in enumerate(pixel_order):
@@ -278,13 +283,17 @@ def build_payouts_percent_sheet(
 
     # Style headers already present
     ws.cell(row=row_title, column=col_label).font = bold
-    for rr in range(row_meta_start, row_meta_start + 7):
+ 
+    for rr in range(row_meta_start, row_meta_start + 7): #looping over metadata rows
         c = ws.cell(row=rr, column=col_label)
         c.font = bold
         c.alignment = left
-    for cc in [2, 4, col_label]:
+    for cc in [2, 4, col_label]: #looping over SD, Average, Pixel ID columns
         ws.cell(row=row_header, column=cc).font = bold
-        ws.cell(row=row_header, column=cc).alignment = left
+        if cc == col_label:
+            ws.cell(row=row_header, column=cc).alignment = left
+        else:
+            ws.cell(row=row_header, column=cc).alignment = center
     for j in range(len(pixel_order)):
         ws.cell(row=row_header, column=first_data_col + j).font = bold
         ws.cell(row=row_header, column=first_data_col + j).alignment = center

@@ -4,8 +4,11 @@ from typing import Optional, Dict, List
 
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.utils import get_column_letter
+
+def to_fill(hex6: str) -> PatternFill:
+    return PatternFill(fill_type="solid", start_color=f"FF{hex6}", end_color=f"FF{hex6}")
 
 def _norm(s: str) -> str:
     return str(s).strip().lower().replace(" ", "").replace("_", "")
@@ -47,7 +50,7 @@ def autosize_columns(ws, col_start: int, col_end: int, min_width: int = 8, max_w
 def ws_title_is_default(title: str) -> bool:
     return str(title).lower().startswith("sheet")
 
-def build_modelled_yields_sheet(
+def build_excel_sheet1(
     df: pd.DataFrame,
     wb: Optional[Workbook] = None,
     sheet_name: str = "1. Modelled Yield"
@@ -81,9 +84,13 @@ def build_modelled_yields_sheet(
             "lat": float(lat) if lat is not None and pd.notna(lat) else None,
             "pixelid": _first_non_null(sub[cols["pixel_id"]]) if cols["pixel_id"] else None,
         }
+
+    # Workbook/sheet
     wb = wb or Workbook()
     ws = wb.active if (wb.active and wb.active.max_row == 1 and ws_title_is_default(wb.active.title)) else wb.create_sheet()
     ws.title = sheet_name
+    # Freeze top rows and left columns
+    ws.freeze_panes = ws.cell(row=10, column=6)  # F10
 
     bold = Font(bold=True)
     center = Alignment(horizontal="center")
@@ -99,6 +106,10 @@ def build_modelled_yields_sheet(
     ws.cell(row=row_title, column=col_label).value = "MODELLED YIELDS (tons per ha)"
     ws.cell(row=row_title, column=col_label).font = bold
     ws.cell(row=row_title, column=col_label).alignment = left
+    #Fill title cell with yellow
+    hx = "FFFF00"
+    cell = ws.cell(row=row_title, column=col_label)
+    cell.fill = to_fill(hx)
 
     # Pixel count
     ws.cell(row=row_meta_start + 0, column=col_label).value = "Pixel count"

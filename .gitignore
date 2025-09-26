@@ -1,5 +1,8 @@
 # data that's too large to go in git
 data/
+output/
+#images
+*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
