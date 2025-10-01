@@ -65,8 +65,23 @@ def build_excel_sheet1(
     year_col = cols["year"]
     yield_col = cols["yield"]
 
-    # Pivot first and derive pixel order from pivot columns to preserve dtype
-    pivot = df.pivot_table(index=year_col, columns=pixel_col, values=yield_col, aggfunc="first").sort_index()
+    # Make sure Year is clean, and build a complete year index (so years with all-NaN are kept)
+    yr = pd.to_numeric(df[year_col], errors="coerce")
+    df = df.assign(**{year_col: yr})
+    all_years = (
+        pd.Series(df[year_col].dropna().astype(int).unique())
+        .sort_values()
+        .tolist()
+    )
+
+    # Build pivot, then reindex to the full year list so rows with all-NaN (e.g., 1999) are preserved
+    pivot = (
+        df.pivot_table(index=year_col, columns=pixel_col, values=yield_col, aggfunc="first")
+        .sort_index()
+        .reindex(all_years)          # <-- this line keeps 1999
+    )
+
+    # Column order for pixels
     pixel_order: List = [c for c in list(pivot.columns) if not pd.isna(c)]
 
     # Per-pixel metadata

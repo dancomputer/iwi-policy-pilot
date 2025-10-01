@@ -1,6 +1,7 @@
 # data that's too large to go in git
 data/
 output/
+old/
 #images
 *.png
 

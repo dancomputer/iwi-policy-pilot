@@ -5,12 +5,13 @@ from openpyxl.styles import Font, Alignment
 import matplotlib.pyplot as plt
 from MakeExogenousExcelInputDataframe import load_and_merge, build_regional_statistics
 from builder_excel_sheet1 import build_excel_sheet1
-from builder_excel_sheet2 import build_excel_sheet2
-from builder_excel_sheet3 import build_excel_sheet3
-from builder_excel_sheet4 import build_excel_sheet4
-from builder_excel_sheet5 import build_excel_sheet5
-from builder_excel_sheet6 import build_excel_sheet6
-from insurance_visualizations import create_area_payout_chart, create_area_payout_percentage_chart, create_diversification_benefit_chart
+from builder_excel_sheet2_formulas import build_excel_sheet2
+from builder_excel_sheet3_formulas import build_excel_sheet3
+from builder_excel_sheet4_formulas import build_excel_sheet4
+from builder_excel_sheet5_formulas import build_excel_sheet5
+from builder_excel_sheet6_formulas import build_excel_sheet6
+from builder_excel_sheet7_8_9_formulas import build_excel_sheet7_chartdata, build_excel_sheet8_area_payout_chart, augment_sheet7_with_percentage_block, build_excel_sheet9_area_payout_pct_chart
+from builder_excel_sheet10_formulas import build_excel_sheet10_diversification_chart
 
 def add_chart_sheet(wb: Workbook, chart_func, df_data, df_final=None, sheet_name: str = "Chart"):
     """Add a chart sheet to the workbook"""
@@ -68,15 +69,31 @@ def build_final_report(out_path: str = "output/final_report.xlsx") -> str:
     wb = build_excel_sheet6(df_regional, df_regional_fmt, wb=wb)
     
     # Add chart sheets
-    wb = add_chart_sheet(wb, create_area_payout_chart, df_regional, sheet_name="7. Area Payout Chart")
-    wb = add_chart_sheet(wb, create_area_payout_percentage_chart, df_regional, df_final, sheet_name="8. Area Payout %")
-    wb = add_chart_sheet(wb, create_diversification_benefit_chart, df_regional, sheet_name="9. Diversification Benefit")
-    
+    # 7a) Chart Data (for Area Payouts)
+    wb = build_excel_sheet7_chartdata(df_regional, wb)
+    # 7b) add percentage block for Sheet 9
+    wb = augment_sheet7_with_percentage_block(wb, sheet7_name="7. Chart Data")
+
+    # 8) Visualization referencing Sheet 7
+    wb = build_excel_sheet8_area_payout_chart(wb)
+
+    # 9) chart (100% stacked) from that block
+    wb = build_excel_sheet9_area_payout_pct_chart(wb, sheet7_name="7. Chart Data", sheet9_name="9. Area Payout %")
+
+    # 10) Diversification Benefit Chart
+    wb = build_excel_sheet10_diversification_chart(wb)
 
     # Remove the default empty sheet if it still exists
     if 'Sheet' in wb.sheetnames and len(wb.sheetnames) > 1:
         wb.remove(wb['Sheet'])
+    
 
+    wb.save(out_path)
+    return out_path
+
+if __name__ == "__main__":
+    build_final_report()
+    
     # Remove temp charts png files
     for file in os.listdir('.'):
         if file.startswith('temp_chart_') and file.endswith('.png'):
@@ -84,8 +101,3 @@ def build_final_report(out_path: str = "output/final_report.xlsx") -> str:
                 os.remove(file)
             except:
                 pass  # Don't fail if cleanup doesn't work
-    wb.save(out_path)
-    return out_path
-
-if __name__ == "__main__":
-    build_final_report()

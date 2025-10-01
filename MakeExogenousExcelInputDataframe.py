@@ -521,6 +521,7 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
         print("Final columns:", df_wide_formatted.columns.tolist())
 
     return df_wide_numeric, df_wide_formatted
+
 if __name__ == "__main__":
         df_final = load_and_merge()
         print("Merged dataframe shape:", df_final.shape)
