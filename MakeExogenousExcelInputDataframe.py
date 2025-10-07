@@ -1,21 +1,23 @@
-from pathlib import Path
+from pathlib import Path 
 import random
 import re
 from typing import Optional
 import pandas as pd
  
-# file: merge_pixel_timeseries.py
+# file: MakeExogenousExcelInputDataframe.py
 """
 Merge three data sources into a single pandas DataFrame:
 - village_pixel_matches_maize-nkasi.csv : has Region, District, Latitude, Longitude, Pixel
-    (adds FarmerID sequential index)
-- ThreeVariableContiguous-SyntheticYield-Conservative-metadata.csv : has pixel, Threshold_Yield
-- ThreeVariableContiguous-SyntheticYield-timeseries-metadata.csv : columns like "pixel 0", "pixel 1", ...
+    (now also has 'Farmer count'; we carry it through)
+- ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv : has Pixel, Threshold_Yield
+- ThreeVariableContiguous-SyntheticYield-Conservative_timeseries.csv : columns like "pixel 0", "pixel 1", ...
     rows correspond to years 1981-2022 (or include a Year column)
 
-Output: df_final (pandas DataFrame) with metadata + long timeseries (Year, Yield) per Pixel.
+Output: df_final (pandas DataFrame) with metadata + long timeseries (Year, Yield) per pixel, plus:
+- Index_ID (numeric; original 'Pixel')
+- Pixel_ID (string; RegionCode + original Pixel integer, e.g., 'NO1234')
+- Farmer count (from village file)
 """
-
 
 # --- Configure input paths (adjust if needed) ---
 PATH_VILL = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv")
@@ -23,220 +25,228 @@ PATH_THRESH = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\Output
 PATH_TS = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Conservative_timeseries.csv")
 
 def _ensure_pixel_col(df: pd.DataFrame) -> pd.DataFrame:
-        # Normalize pixel column name to 'Pixel' if possible
-        cols = {c: c for c in df.columns}
-        for c in df.columns:
-                if re.fullmatch(r'(?i)pixel$', c.strip()):
-                        cols[c] = 'Pixel'
-                        break
-        df = df.rename(columns=cols)
-        return df
+    # Normalize pixel column name to 'Pixel' if possible
+    cols = {c: c for c in df.columns}
+    for c in df.columns:
+        if re.fullmatch(r'(?i)pixel$', str(c).strip()):
+            cols[c] = 'Pixel'
+            break
+    df = df.rename(columns=cols)
+    return df
 
 def _find_year_column(df: pd.DataFrame) -> Optional[str]:
-        # Detect a column that contains year values between 1981 and 2022
-        for c in df.columns:
-                try:
-                        vals = pd.to_numeric(df[c], errors='coerce').dropna().astype(int)
-                        pct_in_range = ((vals >= 1981) & (vals <= 2022)).mean()
-                        if pct_in_range > 0.8:
-                                return c
-                except Exception:
-                        continue
-        return None
+    # Detect a column that contains year values between 1981 and 2022
+    for c in df.columns:
+        try:
+            vals = pd.to_numeric(df[c], errors='coerce').dropna().astype(int)
+            pct_in_range = ((vals >= 1981) & (vals <= 2022)).mean()
+            if pct_in_range > 0.8:
+                return c
+        except Exception:
+            continue
+    return None
+
+def _region_code(region: str) -> str:
+    if pd.isna(region):
+        return "XX"
+    s = str(region).strip().upper()
+    return s[:2] if s else "XX"
 
 def load_and_merge() -> pd.DataFrame:
-        # Read village / pixel matches
-        df_vill = pd.read_csv(PATH_VILL, low_memory=False)
-        df_vill = _ensure_pixel_col(df_vill)
-        if 'Pixel' not in df_vill.columns:
-                # try lowercase
-                if 'pixel' in df_vill.columns:
-                        df_vill = df_vill.rename(columns={'pixel': 'Pixel'})
-        # Add FarmerID as simple sequential index starting at 1
-        df_vill = df_vill.reset_index(drop=True)
+    # Read village / pixel matches (carries 'Farmer count' if present)
+    df_vill = pd.read_csv(PATH_VILL, low_memory=False)
+    df_vill = _ensure_pixel_col(df_vill)
+    if 'Pixel' not in df_vill.columns and 'pixel' in df_vill.columns:
+        df_vill = df_vill.rename(columns={'pixel': 'Pixel'})
+    # Add FarmerID as simple sequential index starting at 1 (kept, but NOT used as Pixel_ID anymore)
+    df_vill = df_vill.reset_index(drop=True)
+    if 'FarmerID' not in df_vill.columns:
         df_vill['FarmerID'] = range(1, len(df_vill) + 1)
 
-        # Read threshold metadata and normalize pixel column name
-        df_thresh = pd.read_csv(PATH_THRESH, low_memory=False)
-        df_thresh = _ensure_pixel_col(df_thresh)
-        if 'Pixel' not in df_thresh.columns and 'pixel' in df_thresh.columns:
-                df_thresh = df_thresh.rename(columns={'pixel': 'Pixel'})
+    # Read threshold metadata and normalize pixel column name
+    df_thresh = pd.read_csv(PATH_THRESH, low_memory=False)
+    df_thresh = _ensure_pixel_col(df_thresh)
+    if 'Pixel' not in df_thresh.columns and 'pixel' in df_thresh.columns:
+        df_thresh = df_thresh.rename(columns={'pixel': 'Pixel'})
 
-        # Convert Pixel types to numeric where possible
-        for df in (df_vill, df_thresh):
-                if 'Pixel' in df.columns:
-                        df['Pixel'] = pd.to_numeric(df['Pixel'], errors='coerce').astype('Int64')
+    # Convert Pixel types to numeric where possible
+    for d in (df_vill, df_thresh):
+        if 'Pixel' in d.columns:
+            d['Pixel'] = pd.to_numeric(d['Pixel'], errors='coerce').astype('Int64')
 
-        # Merge village with threshold metadata on Pixel
-        df_meta = pd.merge(df_vill, df_thresh, on='Pixel', how='left', suffixes=('', '_thresh'))
+    # Merge village with threshold metadata on Pixel
+    df_meta = pd.merge(df_vill, df_thresh, on='Pixel', how='left', suffixes=('', '_thresh'))
 
-        # Read timeseries metadata
-        df_ts = pd.read_csv(PATH_TS, low_memory=False)
+    # Read timeseries
+    df_ts = pd.read_csv(PATH_TS, low_memory=False)
 
-        # Detect year column (if present). If none, assume rows correspond to 1981..2022 in order.
-        year_col = _find_year_column(df_ts)
-        if year_col is None:
-                # create Year column from 1981..2022 assuming rows are in order
-                nrows = len(df_ts)
-                start_year = 1981
-                years = list(range(start_year, start_year + nrows))
-                df_ts = df_ts.copy()
-                df_ts.insert(0, 'Year', years)
-                year_col = 'Year'
-        else:
-                # ensure year column is integer
-                df_ts[year_col] = pd.to_numeric(df_ts[year_col], errors='coerce').astype('Int64')
+    # Detect year column (if present). If none, assume rows correspond to 1981..2022 in order.
+    year_col = _find_year_column(df_ts)
+    if year_col is None:
+        nrows = len(df_ts)
+        start_year = 1981
+        years = list(range(start_year, start_year + nrows))
+        df_ts = df_ts.copy()
+        df_ts.insert(0, 'Year', years)
+        year_col = 'Year'
+    else:
+        df_ts[year_col] = pd.to_numeric(df_ts[year_col], errors='coerce').astype('Int64')
 
-        # Identify pixel columns: those whose name contains digits and the word 'pixel' (case-insensitive)
-        pixel_cols = []
-        for c in df_ts.columns:
-                if c == year_col:
-                        continue
-                if re.search(r'(?i)pixel', c) or re.search(r'^\d+$', c.strip()):
-                        pixel_cols.append(c)
-        # Fallback: if no pixel-like columns found, assume all non-year cols are pixel columns
-        if not pixel_cols:
-                pixel_cols = [c for c in df_ts.columns if c != year_col]
+    # Identify pixel columns
+    pixel_cols = []
+    for c in df_ts.columns:
+        if c == year_col:
+            continue
+        if re.search(r'(?i)pixel', c) or re.search(r'^\d+$', str(c).strip()):
+            pixel_cols.append(c)
+    if not pixel_cols:
+        pixel_cols = [c for c in df_ts.columns if c != year_col]
 
-        # Melt to long format
-        df_long = df_ts.melt(id_vars=[year_col], value_vars=pixel_cols,
-                                                 var_name='pixel_col', value_name='Yield')
-        df_long = df_long.rename(columns={year_col: 'Year'})
+    # Melt to long
+    df_long = df_ts.melt(id_vars=[year_col], value_vars=pixel_cols,
+                         var_name='pixel_col', value_name='Yield')
+    df_long = df_long.rename(columns={year_col: 'Year'})
 
-        # Extract numeric Pixel id from pixel_col names
-        def extract_pixel_id(s: str) -> Optional[int]:
-                if pd.isna(s):
-                        return None
-                # try to find an integer in the column name
-                m = re.search(r'(\d+)', str(s))
-                if m:
-                        return int(m.group(1))
-                # if the whole column name is numeric
-                try:
-                        return int(str(s).strip())
-                except Exception:
-                        return None
+    # Extract numeric Pixel id from pixel_col names
+    def extract_pixel_id(s: str) -> Optional[int]:
+        if pd.isna(s):
+            return None
+        m = re.search(r'(\d+)', str(s))
+        if m:
+            return int(m.group(1))
+        try:
+            return int(str(s).strip())
+        except Exception:
+            return None
 
-        df_long['Pixel'] = df_long['pixel_col'].apply(extract_pixel_id).astype('Int64')
+    df_long['Pixel'] = df_long['pixel_col'].apply(extract_pixel_id).astype('Int64')
 
-        # Convert Yield to numeric
-        df_long['Yield'] = pd.to_numeric(df_long['Yield'], errors='coerce')
+    # Convert Yield to numeric
+    df_long['Yield'] = pd.to_numeric(df_long['Yield'], errors='coerce')
 
-        # Merge long timeseries with metadata on Pixel
-        df_final = pd.merge(df_meta, df_long.drop(columns=['pixel_col']), on='Pixel', how='left')
+    # Merge long timeseries with metadata on Pixel
+    df_final = pd.merge(df_meta, df_long.drop(columns=['pixel_col']), on='Pixel', how='left')
 
-        # Optional: reorder columns (Pixel, Year, Yield, Threshold_Yield, metadata...)
-        cols_front = ['Pixel', 'Year', 'Yield']
-        if 'Threshold_Yield' in df_final.columns:
-                cols_front.append('Threshold_Yield')
-        remaining = [c for c in df_final.columns if c not in cols_front]
-        df_final = df_final[cols_front + remaining]
+    # Optional: reorder columns (Pixel, Year, Yield, Threshold_Yield, metadata...)
+    cols_front = ['Pixel', 'Year', 'Yield']
+    if 'Threshold_Yield' in df_final.columns:
+        cols_front.append('Threshold_Yield')
+    remaining = [c for c in df_final.columns if c not in cols_front]
+    df_final = df_final[cols_front + remaining]
         
-        #ADD additional values
-        df_final["Yield_Abs"] = df_final["Yield"]*df_final["Threshold_Yield"]
-        #1. Define "Attach" and "Detach" columns as 95th and 5th percentiles of absolute yield by pixel 
-        df_final["Attach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.5))
-        df_final["Detach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.15))
-        #2. Define Loan Amount as a random amount between 1000 and 1500. Each region has same loan amount.
-        # dictionary mapping each unique region to a random number
-        region_map = {region: random.randint(1000, 1500) for region in df_final["Region"].unique()}
-        # Map the values from the dictionary to the 'Region' column
-        df_final["Loan_Amount"] = df_final["Region"].map(region_map)
-        print("Assigned random Loan Amount between 1000 and 1500 per Region")
-        #3. Rename FarmerID as "Pixel ID"
-        df_final = df_final.rename(columns={"FarmerID": "Pixel_ID"})
-        #4. rename Pixel as Index_ID
-        df_final = df_final.rename(columns={"Pixel": "Index_ID"})
+    # ADD additional values
+    df_final["Yield_Abs"] = df_final["Yield"] * df_final["Threshold_Yield"]
 
-        #5. Add Area: Dictionary based on mapping Region to North/South etc.
-        tanzania_zones = {
-            "Northern Zone": [
-                "Arusha",
-                "Kilimanjaro",
-                "Manyara",
-                "Tanga"
-            ],
-            "Central Zone": [
-                "Dodoma",
-                "Singida",
-                "Tabora"
-            ],
-            "Lake Zone": [
-                "Geita",
-                "Kagera",
-                "Mara",
-                "Mwanza",
-                "Shinyanga",
-                "Simiyu"
-            ],
-            "Western Zone": [
-                "Kigoma",
-                "Katavi"
-            ],
-            "Southern Highlands Zone": [
-                "Iringa",
-                "Mbeya",
-                "Njombe",
-                "Rukwa",
-                "Ruvuma",
-                "Songwe"
-            ],
-            "Coastal Zone": [
-                "Dar es Salaam",
-                "Lindi",
-                "Morogoro",
-                "Mtwara",
-                "Pwani"  # 'Pwani' means 'Coast' in Swahili
-            ],
-            "Zanzibar (Islands)": [
-                "Pemba North",
-                "Pemba South",
-                "Unguja North",  # Also known as Zanzibar North
-                "Unguja South",  # Also known as Zanzibar South & Central
-                "Mjini Magharibi" # Also known as Zanzibar Urban West
-            ]
-        }
-        def map_region_to_area(region: str) -> str:
-            # Map a region name to its corresponding area using the tanzania_zones dictionary
-            # Do not be case sensitive, use fuzzy matching too
-            region = region.lower()
-            for area, regions in tanzania_zones.items():
-                for reg in regions:
-                    if region == reg.lower() or region in reg.lower() or reg.lower() in region:
-                        return area
-            return "Unknown"
-        df_final["Area"] = df_final["Region"].apply(map_region_to_area)
+    # 1. Define "Attach" and "Detach" columns as quantiles of absolute yield by pixel (unchanged)
+    df_final["Attach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.5))
+    df_final["Detach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.15))
 
-        #II. Do some basic processing
-        #1. Payout Base fraction: 0 if Yield_Abs > Attach, 1 if Yield_Abs < Detach, linear in between
-        df_final["PayoutsPercent"] = df_final.apply(lambda x: 0 if x["Yield_Abs"] > x["Attach"] else 1 if x["Yield_Abs"] < x["Detach"] else (x["Attach"] - x["Yield_Abs"]) / (x["Attach"] - x["Detach"]), axis=1)
-        #2. Payout amount base:
-        df_final["Sum_Insured"] = df_final["Loan_Amount"] * 0.4 
-        print("using Sum_Insured as 40% of Loan Amount")
-        df_final["PayoutAmountBase"] = df_final["PayoutsPercent"] * df_final["Sum_Insured"]
-        #3. Payout stats: Average, SD, Coefficient of Variation (CoV), Min, Max, 90th percentile, 95th percentile per Pixel
-        # compute per-pixel (Pixel_ID) statistics for PayoutAmountBase and attach them back to df_final
-        stat_aggs = {
-            'PayoutAvg': 'mean',
-            'PayoutSD': 'std',
-            'PayoutMin': 'min',
-            'PayoutMax': 'max',
-            'Payout90': lambda x: x.quantile(0.90),
-            'Payout95': lambda x: x.quantile(0.95),
-        }
-        stats = df_final.groupby('Pixel_ID')['PayoutAmountBase'].agg(**stat_aggs)
+    # 2. Define Loan Amount as a random amount between 1000 and 1500. Each region has same loan amount.
+    region_map = {region: random.randint(1000, 1500) for region in df_final["Region"].unique()}
+    df_final["Loan_Amount"] = df_final["Region"].map(region_map)
+    print("Assigned random Loan Amount between 1000 and 1500 per Region")
 
-        # Coefficient of variation: SD / mean (guard against division by zero)
-        stats['PayoutCoV'] = stats['PayoutSD'] / stats['PayoutAvg'].replace({0: pd.NA})
-        stats = stats.fillna(0)
+    # 3. RENAME Pixel -> Index_ID, and CREATE Pixel_ID = <RegionCode><Index_ID>
+    df_final = df_final.rename(columns={"Pixel": "Index_ID"})
+    df_final["Pixel_ID"] = df_final.apply(
+        lambda r: f"{_region_code(r.get('Region'))}{int(r['Index_ID'])}" if pd.notna(r['Index_ID']) else None,
+        axis=1
+    )
 
-        # Merge the statistics back into the main dataframe (one row per original row, stats repeated per Pixel_ID)
-        df_final = df_final.merge(stats, how='left', left_on='Pixel_ID', right_index=True)
+    # 5. Add Area: Dictionary based on mapping Region to North/South etc. (UNCHANGED)
+    tanzania_zones = {
+        "Northern Zone": [
+            "Arusha",
+            "Kilimanjaro",
+            "Manyara",
+            "Tanga"
+        ],
+        "Central Zone": [
+            "Dodoma",
+            "Singida",
+            "Tabora"
+        ],
+        "Lake Zone": [
+            "Geita",
+            "Kagera",
+            "Mara",
+            "Mwanza",
+            "Shinyanga",
+            "Simiyu"
+        ],
+        "Western Zone": [
+            "Kigoma",
+            "Katavi"
+        ],
+        "Southern Highlands Zone": [
+            "Iringa",
+            "Mbeya",
+            "Njombe",
+            "Rukwa",
+            "Ruvuma",
+            "Songwe"
+        ],
+        "Coastal Zone": [
+            "Dar es Salaam",
+            "Lindi",
+            "Morogoro",
+            "Mtwara",
+            "Pwani"
+        ],
+        "Zanzibar (Islands)": [
+            "Pemba North",
+            "Pemba South",
+            "Unguja North",
+            "Unguja South",
+            "Mjini Magharibi"
+        ]
+    }
+    def map_region_to_area(region: str) -> str:
+        # Map a region name to its corresponding area using the tanzania_zones dictionary
+        # Do not be case sensitive, use fuzzy matching too
+        region_low = str(region).lower()
+        for area, regions in tanzania_zones.items():
+            for reg in regions:
+                rl = reg.lower()
+                if region_low == rl or region_low in rl or rl in region_low:
+                    return area
+        return "Unknown"
+    df_final["Area"] = df_final["Region"].apply(map_region_to_area)
 
-        print("Computed per-pixel payout statistics (avg, sd, cov, min, max, 90th, 95th).")
+    # II. Do some basic processing (unchanged)
+    # 1. Payout Base fraction: 0 if Yield_Abs > Attach, 1 if Yield_Abs < Detach, linear in between
+    df_final["PayoutsPercent"] = df_final.apply(
+        lambda x: 0 if x["Yield_Abs"] > x["Attach"]
+        else 1 if x["Yield_Abs"] < x["Detach"]
+        else (x["Attach"] - x["Yield_Abs"]) / (x["Attach"] - x["Detach"]),
+        axis=1
+    )
+    # 2. Payout amount base:
+    df_final["Sum_Insured"] = df_final["Loan_Amount"] * 0.4 
+    print("using Sum_Insured as 40% of Loan Amount")
+    df_final["PayoutAmountBase"] = df_final["PayoutsPercent"] * df_final["Sum_Insured"]
 
+    # 3. Payout stats: Average, SD, Coefficient of Variation (CoV), Min, Max, 90th percentile, 95th percentile per Pixel
+    stat_aggs = {
+        'PayoutAvg': 'mean',
+        'PayoutSD': 'std',
+        'PayoutMin': 'min',
+        'PayoutMax': 'max',
+        'Payout90': lambda x: x.quantile(0.90),
+        'Payout95': lambda x: x.quantile(0.95),
+    }
+    stats = df_final.groupby('Pixel_ID')['PayoutAmountBase'].agg(**stat_aggs)
 
-        return df_final
+    # Coefficient of variation: SD / mean (guard against division by zero)
+    stats['PayoutCoV'] = stats['PayoutSD'] / stats['PayoutAvg'].replace({0: pd.NA})
+    stats = stats.fillna(0)
+
+    # Merge the statistics back into the main dataframe (one row per original row, stats repeated per Pixel_ID)
+    df_final = df_final.merge(stats, how='left', left_on='Pixel_ID', right_index=True)
+
+    print("Computed per-pixel payout statistics (avg, sd, cov, min, max, 90th, 95th).")
+
+    return df_final
 
 ####################################################
 def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
@@ -291,7 +301,6 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
         for r in regions:
             key = r.lower()
             if key in region_available_lower:
-                # use canonical group name (r) as column label
                 existing.append(r)
         if verbose:
             print(f"[{area}] matched regions: {existing}")
@@ -377,14 +386,8 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
             return None
         return df_pixels[df_pixels['Pixel_ID'].isin(valid_ids)]['PayoutCoV'].mean()
 
-    # REPLACED: pixel-level distribution => area-level annual totals distribution
+    # area-level annual totals distribution (unchanged)
     def compute_area_level_distribution(regions):
-        """
-        Compute distribution of annual total payouts for the given regions:
-        - For each year, sum payouts across all pixels in the regions.
-        - Return avg, sd, min, max, p90, p95 over those annual totals.
-        Include years with zero totals; skip years with no data (None).
-        """
         totals = []
         for year in years:
             v = compute_year_value(regions, year)
@@ -413,7 +416,6 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
         )
 
     def compute_area_cov(regions):
-        """Calculate CoV of area-level annual payout totals as SD/Average using the same totals as distribution."""
         dist = compute_area_level_distribution(regions)
         avg, sd = dist.get('avg'), dist.get('sd')
         if avg is None or sd is None or avg == 0:
@@ -451,7 +453,6 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
         rows["Sum insured"][col_label] = compute_sum_insured(member_regions)
         for y in years:
             rows[str(y)][col_label] = compute_year_value(member_regions, y)
-        # UPDATED: use area-level distribution instead of pixel-level
         dist = compute_area_level_distribution(member_regions)
         rows["Average Payout"][col_label] = dist['avg']
         rows["SD"][col_label] = dist['sd']
@@ -523,12 +524,9 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
     return df_wide_numeric, df_wide_formatted
 
 if __name__ == "__main__":
-        df_final = load_and_merge()
-        print("Merged dataframe shape:", df_final.shape)
-        #print(df_final.head())
-        df_regional, df_regional_fmt = build_regional_statistics(df_final)
-        print("Regional statistics dataframe shape:", df_regional.shape)
-        # Optionally save to disk:
-        # df_final.to_csv("merged_pixel_timeseries_long.csv", index=False)
-        #wb = build_modelled_yields_sheet(df_final)
-        #wb.save("policy_pilot_output3.xlsx")
+    df_final = load_and_merge()
+    print("Merged dataframe shape:", df_final.shape)
+    df_regional, df_regional_fmt = build_regional_statistics(df_final)
+    print("Regional statistics dataframe shape:", df_regional.shape)
+    # Optionally save to disk:
+    # df_final.to_csv("merged_pixel_timeseries_long.csv", index=False)

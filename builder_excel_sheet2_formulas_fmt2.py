@@ -152,7 +152,7 @@ def build_excel_sheet2(df: pd.DataFrame, wb: Optional[Workbook] = None, sheet_na
     # ===== Header row (row 9) =====
     ws.cell(row=ROW_PIXEL_ID, column=2).value = "SD"
     ws.cell(row=ROW_PIXEL_ID, column=4).value = "Average"
-    ws.cell(row=ROW_PIXEL_ID, column=COL_YEAR_LABEL).value = "Year"
+    ws.cell(row=ROW_PIXEL_ID, column=COL_YEAR_LABEL).value = "Pixel ID"
     for j, pix in enumerate(pixel_order):
         ws.cell(row=ROW_PIXEL_ID, column=COL_FIRST_PIXEL + j).value = meta[pix]["pixelid"] or str(pix)
 
@@ -274,5 +274,70 @@ def build_excel_sheet2(df: pd.DataFrame, wb: Optional[Workbook] = None, sheet_na
             wb.calculation.fullCalcOnLoad = True
         except Exception:
             pass
+
+
+
+    # === BEGIN: Formatting tweaks per request (v2) ===
+
+    from openpyxl.styles import Alignment as _Align2
+
+    from openpyxl.utils import get_column_letter as _gcl2
+
+
+    # Task 4: Merge title with neighbor on the right; set column E width -> 18.0
+
+    try:
+
+        ws.merge_cells(start_row=ROW_TITLE, start_column=COL_YEAR_LABEL, end_row=ROW_TITLE, end_column=COL_FIRST_PIXEL)
+
+    except Exception:
+
+        pass
+
+    ws.column_dimensions['E'].width = 18.0
+
+
+    # Task 2: Columns A-D width -> 18.0
+
+    for _col in ['A','B','C','D']:
+
+        ws.column_dimensions[_col].width = 18.0
+
+
+    # Task 2: Row with 'Average SD' -> set height 26.7 and wrap text
+
+    try:
+
+        try:
+
+            last_col_for_wrap = max(COL_FIRST_PIXEL + len(pixel_order) - 1, COL_YEAR_LABEL)
+
+        except Exception:
+
+            last_col_for_wrap = ws.max_column
+
+        for _cc in range(1, last_col_for_wrap + 1):
+
+            _cell = ws.cell(row=r_sum1, column=_cc)
+
+            _cell.alignment = _Align2(wrap_text=True, horizontal=_cell.alignment.horizontal if _cell.alignment else None, vertical=_cell.alignment.vertical if _cell.alignment else None)
+
+        ws.row_dimensions[r_sum1].height = 26.7
+
+    except Exception:
+
+        pass
+
+
+    # Task 1: Set data columns (F and onward) width -> 21.4
+
+    _last_data_col = COL_FIRST_PIXEL + len(pixel_order) - 1
+
+    for _c in range(COL_FIRST_PIXEL, max(COL_FIRST_PIXEL, _last_data_col) + 1):
+
+        ws.column_dimensions[_gcl2(_c)].width = 21.4
+
+    # === END: Formatting tweaks per request (v2) ===
+
 
     return wb

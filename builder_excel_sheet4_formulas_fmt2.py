@@ -241,4 +241,34 @@ def build_excel_sheet4(
         except Exception:
             pass
 
+
+
+    # === BEGIN: Formatting tweaks per request (v2) ===
+
+    from openpyxl.utils import get_column_letter as _gcl4
+
+    # Task 1: Set data columns (F and onward) width -> 21.4
+
+    try:
+
+        last_data_col = COL_FIRST + len(pixel_order) - 1
+
+    except Exception:
+
+        last_data_col = ws.max_column
+
+    for _c in range(6, max(6, last_data_col) + 1):
+
+        ws.column_dimensions[_gcl4(_c)].width = 21.4
+
+
+    # Task 5: Columns A-D width -> 1.0
+
+    for _col in ['A','B','C','D']:
+
+        ws.column_dimensions[_col].width = 1.0
+
+    # === END: Formatting tweaks per request (v2) ===
+
+
     return wb

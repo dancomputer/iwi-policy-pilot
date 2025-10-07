@@ -4,14 +4,15 @@ from openpyxl.drawing.image import Image
 from openpyxl.styles import Font, Alignment
 import matplotlib.pyplot as plt
 from MakeExogenousExcelInputDataframe import load_and_merge, build_regional_statistics
-from builder_excel_sheet1 import build_excel_sheet1
-from builder_excel_sheet2_formulas import build_excel_sheet2
-from builder_excel_sheet3_formulas import build_excel_sheet3
-from builder_excel_sheet4_formulas import build_excel_sheet4
-from builder_excel_sheet5_formulas import build_excel_sheet5
-from builder_excel_sheet6_formulas import build_excel_sheet6
+from builder_excel_sheet1_fmt2 import build_excel_sheet1
+from builder_excel_sheet2_formulas_fmt2 import build_excel_sheet2
+from builder_excel_sheet3_formulas_fmt2 import build_excel_sheet3
+from builder_excel_sheet4_formulas_fmt2 import build_excel_sheet4
+from builder_excel_sheet5_formulas_fmt2 import build_excel_sheet5
+from builder_excel_sheet6_formulas_fmt2 import build_excel_sheet6
 from builder_excel_sheet7_8_9_formulas import build_excel_sheet7_chartdata, build_excel_sheet8_area_payout_chart, augment_sheet7_with_percentage_block, build_excel_sheet9_area_payout_pct_chart
 from builder_excel_sheet10_formulas import build_excel_sheet10_diversification_chart
+from builder_summary_sheet import build_excel_sheet0_summary
 
 def add_chart_sheet(wb: Workbook, chart_func, df_data, df_final=None, sheet_name: str = "Chart"):
     """Add a chart sheet to the workbook"""
@@ -83,6 +84,8 @@ def build_final_report(out_path: str = "output/final_report.xlsx") -> str:
     # 10) Diversification Benefit Chart
     wb = build_excel_sheet10_diversification_chart(wb)
 
+    # 11) summary sheet 
+    wb = build_excel_sheet0_summary(wb)
     # Remove the default empty sheet if it still exists
     if 'Sheet' in wb.sheetnames and len(wb.sheetnames) > 1:
         wb.remove(wb['Sheet'])
