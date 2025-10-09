@@ -138,8 +138,8 @@ def load_and_merge() -> pd.DataFrame:
     df_final["Yield_Abs"] = df_final["Yield"] * df_final["Threshold_Yield"]
 
     # 1. Define "Attach" and "Detach" columns as quantiles of absolute yield by pixel (unchanged)
-    df_final["Attach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.5))
-    df_final["Detach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.15))
+    df_final["Attach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.40))
+    df_final["Detach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.10))
 
     # 2. Loan_Amount is already present from village file (no action needed)
 
