@@ -21,8 +21,8 @@ Output: df_final (pandas DataFrame) with metadata + long timeseries (Year, Yield
 
 # --- Configure input paths (adjust if needed) ---
 PATH_VILL = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv")
-PATH_THRESH = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv")
-PATH_TS = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Conservative_timeseries.csv")
+PATH_THRESH = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv")
+PATH_TS = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Conservative_timeseries.csv")
 
 def _ensure_pixel_col(df: pd.DataFrame) -> pd.DataFrame:
     # Normalize pixel column name to 'Pixel' if possible
@@ -62,7 +62,7 @@ def load_and_merge() -> pd.DataFrame:
     df_vill = df_vill.reset_index(drop=True)
     if 'FarmerID' not in df_vill.columns:
         df_vill['FarmerID'] = range(1, len(df_vill) + 1)
-
+    
     # Read threshold metadata and normalize pixel column name
     df_thresh = pd.read_csv(PATH_THRESH, low_memory=False)
     df_thresh = _ensure_pixel_col(df_thresh)
@@ -84,7 +84,7 @@ def load_and_merge() -> pd.DataFrame:
     year_col = _find_year_column(df_ts)
     if year_col is None:
         nrows = len(df_ts)
-        start_year = 1981
+        start_year = 1982
         years = list(range(start_year, start_year + nrows))
         df_ts = df_ts.copy()
         df_ts.insert(0, 'Year', years)
@@ -141,10 +141,7 @@ def load_and_merge() -> pd.DataFrame:
     df_final["Attach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.5))
     df_final["Detach"] = df_final.groupby("Pixel")["Yield_Abs"].transform(lambda x: x.quantile(0.15))
 
-    # 2. Define Loan Amount as a random amount between 1000 and 1500. Each region has same loan amount.
-    region_map = {region: random.randint(1000, 1500) for region in df_final["Region"].unique()}
-    df_final["Loan_Amount"] = df_final["Region"].map(region_map)
-    print("Assigned random Loan Amount between 1000 and 1500 per Region")
+    # 2. Loan_Amount is already present from village file (no action needed)
 
     # 3. RENAME Pixel -> Index_ID, and CREATE Pixel_ID = <RegionCode><Index_ID>
     df_final = df_final.rename(columns={"Pixel": "Index_ID"})
@@ -222,7 +219,7 @@ def load_and_merge() -> pd.DataFrame:
         axis=1
     )
     # 2. Payout amount base:
-    df_final["Sum_Insured"] = df_final["Loan_Amount"] * 0.4 
+    df_final["Sum_Insured"] = df_final["Pixel_Loan_Amount"] * 0.4 
     print("using Sum_Insured as 40% of Loan Amount")
     df_final["PayoutAmountBase"] = df_final["PayoutsPercent"] * df_final["Sum_Insured"]
 
@@ -319,7 +316,7 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
 
     # Required pixel-level columns
     pixel_cols_needed = [
-        'Pixel_ID', 'Region', 'Loan_Amount', 'Sum_Insured',
+        'Pixel_ID', 'Region', 'Pixel_Loan_Amount', 'Sum_Insured',
         'PayoutAvg', 'PayoutSD', 'PayoutMin', 'PayoutMax', 'Payout90', 'Payout95', 'PayoutCoV'
     ]
     for c in pixel_cols_needed:
@@ -349,7 +346,7 @@ def build_regional_statistics(df_final: pd.DataFrame, verbose: bool = False):
     years = sorted(df_final['Year'].dropna().unique().tolist())
 
     def compute_loans(regions):
-        return df_pixels[df_pixels['Region'].isin(regions)]['Loan_Amount'].sum()
+        return df_pixels[df_pixels['Region'].isin(regions)]['Pixel_Loan_Amount'].sum()
 
     def compute_sum_insured(regions):
         return df_pixels[df_pixels['Region'].isin(regions)]['Sum_Insured'].sum()

@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 from openpyxl.styles import Font, Alignment
@@ -13,6 +14,8 @@ from builder_excel_sheet6_formulas_fmt2 import build_excel_sheet6
 from builder_excel_sheet7_8_9_formulas import build_excel_sheet7_chartdata, build_excel_sheet8_area_payout_chart, augment_sheet7_with_percentage_block, build_excel_sheet9_area_payout_pct_chart
 from builder_excel_sheet10_formulas import build_excel_sheet10_diversification_chart
 from builder_summary_sheet import build_excel_sheet0_summary
+from builder_model_descriptions_v6 import build_model_descriptions
+#from builder_df_pixel_sheet import build_df_pixel_sheet
 
 def add_chart_sheet(wb: Workbook, chart_func, df_data, df_final=None, sheet_name: str = "Chart"):
     """Add a chart sheet to the workbook"""
@@ -85,12 +88,25 @@ def build_final_report(out_path: str = "output/final_report.xlsx") -> str:
     wb = build_excel_sheet10_diversification_chart(wb)
 
     # 11) summary sheet 
-    wb = build_excel_sheet0_summary(wb)
+    wb = build_excel_sheet0_summary(wb,experiment_name="CalendarDays180_Maize_1982_2021_SPARSE")
+    
+    wb = build_model_descriptions(
+        df_final,
+        wb=wb,
+        sheet_name="Model Descriptions",
+        descriptions_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_plaintext-description",
+        pixel_meta_csv=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv",
+        meta_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_meta"
+    )
+
+    # 12) DataFrame Pixel Sheet
+    #df_pred = pd.read_csv(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_PredictionMaize_1982_2022_SPARSE\predicted_2022.csv")  # or any equivalent DataFrame
+    #wb = build_df_pixel_sheet(df_pred, wb=wb, sheet_name="Payouts per Pixel")
+   
     # Remove the default empty sheet if it still exists
     if 'Sheet' in wb.sheetnames and len(wb.sheetnames) > 1:
         wb.remove(wb['Sheet'])
     
-
     wb.save(out_path)
     return out_path
 

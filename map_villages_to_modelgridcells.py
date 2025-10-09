@@ -12,7 +12,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
     metadata_df = pd.read_csv(metadata_file)
 
     # Validate columns
-    required_highlands = {"Village", "Region", "District", "Latitude", "Longitude"}
+    required_highlands = {"Village", "Region", "District", "Latitude", "Longitude", "Loan Amount"}
     required_metadata = {"pixel", "Lat", "Lon"}
     missing_h = required_highlands - set(highlands_df.columns)
     missing_m = required_metadata - set(metadata_df.columns)
@@ -22,7 +22,10 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
         raise ValueError(f"Metadata file missing required columns: {sorted(missing_m)}")
 
     # Keep rows with valid coordinates; each row == 1 farmer
-    farmers = highlands_df[["Village", "Region", "District", "Latitude", "Longitude"]].dropna().copy()
+    farmers = highlands_df[["Village", "Region", "District", "Latitude", "Longitude", "Loan Amount"]].dropna(subset=["Latitude", "Longitude"]).copy()
+    
+    # Convert Loan Amount to numeric
+    farmers["Loan Amount"] = pd.to_numeric(farmers["Loan Amount"], errors="coerce").fillna(0)
 
     # Preload metadata for distance calc
     meta_coords = metadata_df[["Lat", "Lon"]].to_numpy()
@@ -41,6 +44,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
             "Latitude": v_lat,
             "Longitude": v_lon,
             "Pixel": meta_pixels[min_idx],
+            "Loan Amount": r["Loan Amount"],
         })
 
     matches_df = pd.DataFrame(assignments)
@@ -68,6 +72,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
         Village=("Village", join_unique),     # "-" joined unique villages
         **{"Farmer Number": ("Village", "size")},  # count of rows (farmers) in pixel
         Villages_In_Pixel=("Village", "nunique"),
+        Pixel_Loan_Amount=("Loan Amount", "sum"),
     ).reset_index()
 
     grouped.to_csv(output_file, index=False)
@@ -77,7 +82,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
 if __name__ == "__main__":
     result = match_villages_to_pixels(
         r'C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\NKASI - MAIZE - revised 2025.xlsx',
-        r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
+        r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
         r'.\data\village_pixel_matches_maize-nkasi.csv'
     )
     print(f"Produced {len(result)} rows (one per unique Pixel).")

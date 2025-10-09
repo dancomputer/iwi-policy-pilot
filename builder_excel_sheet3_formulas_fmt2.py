@@ -25,7 +25,7 @@ def _resolve_cols(df: pd.DataFrame) -> Dict[str, Optional[str]]:
     return {
         "pixel_key": pick("Pixel_ID", "pixelid", "pixel"),
         "year":      pick("Year", "year"),
-        "loan":      pick("Loan_Amount", "loanamount", "loan"),
+        "loan":      pick("Pixel_Loan_Amount"),
         "area":      pick("Area", "area_ha", "hectares"),
         "region":    pick("Region"),
         "lon":       pick("lon", "longitude"),
@@ -163,12 +163,12 @@ def build_excel_sheet3(
         # Pixel count ordinal
         ws.cell(row=ROW_META_START + 0, column=c).value = j + 1
 
-        # --- NEW: Loan Amounts (USD) = Sheet1 FarmerCount × per-farmer region loan (constant) ---
-        loan_per_farmer = _to_float_or_none(meta[pix]["loan"])
-        if loan_per_farmer is not None:
+        # --- Update: Loan Amounts (USD) = Pixel-total loan---
+        loan_pixel = _to_float_or_none(meta[pix]["loan"])
+        if loan_pixel is not None:
             farmer_ref = f"'{SHEET1_NAME}'!{colL}{SHEET1_ROW_FARMERCOUNT}"
             loan_formula = (
-                f"=IF(OR({farmer_ref}=\"\",NOT(ISNUMBER({farmer_ref}))),\"\",{farmer_ref}*{loan_per_farmer})"
+                f"=IF(OR({farmer_ref}=\"\",NOT(ISNUMBER({farmer_ref}))),\"\",{loan_pixel})"
             )
             ws.cell(row=ROW_META_START + 1, column=c).value = loan_formula
             ws.cell(row=ROW_META_START + 1, column=c).number_format = "#,##0"

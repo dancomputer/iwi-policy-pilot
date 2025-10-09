@@ -61,27 +61,36 @@ def _get_last_pixel_col_letter(ws_modelled_yield) -> str:
     return get_column_letter(last)
 
 
+def _extract_crop_from_experiment_name(experiment_name: Optional[str]) -> str:
+    """
+    Parse the crop name from an experiment name like:
+      'OutputCalendarDays180_Maize_1982_2021_SPARSE'
+    We split on '_' and take the second token (index 1).
+    """
+    if not experiment_name:
+        return "Unknown"
+    parts = str(experiment_name).split("_")
+    return parts[1] if len(parts) > 1 and parts[1] else "Unknown"
+
+
 def build_excel_sheet0_summary(
     wb: Workbook,
     sheet_name: str = "0. Summary",
+    experiment_name: Optional[str] = None,  # NEW: to populate B1 "Crop: <name>"
 ) -> Workbook:
     """
-    Builds '0. Summary' with three sections (Data, Charts, Summary Statistics).
+    Builds '0. Summary' with:
+      - Section: Data (A column titles + merged B:J descriptions)
+      - B1 shows 'Crop: <name>' in blue size 14 (parsed from experiment_name)
+      - Section: Charts
+      - Section: Summary Statistics (Region | # of Pixels | # of Farmers | Sum Insured | Average Payout)
+      - Final Section: Data sources (two fixed entries)
 
-    Section 3 columns:
-      Region | # of Pixels | # of Farmers | Sum Insured | Average Payout
-
-    Pulled from workbook:
-      - # of Pixels: SUMPRODUCT over Sheet 1 Region row (row 5).
-      - # of Farmers: SUMPRODUCT of Region mask × Sheet 1 Farmer count row (row 6).
-      - Sum Insured: SUMPRODUCT of Region mask × Sheet 3 Sum Insured row (row 4).
-      - Average Payout: SUMPRODUCT of Region mask × row on Sheet 3 labeled
-                        "Average Payout by pixel" (row located via MATCH on column E).
-      - Totals: column sums.
-      - Expected Loss (% sum insured): (SUM of "Average Payout by pixel" row across F:Last) /
-                                      (SUM of "Sum Insured" row across F:Last), all on Sheet 3.
+    Workbook references:
+      - Sheet 1 ("1. Modelled Yield"): region row=5, farmer count row=6, pixel data from F..Last
+      - Sheet 3 ("3. Payout Amounts"): Sum Insured row=4, and stats row labeled "Average Payout by pixel" in column E
     """
-    # Replace existing
+    # Replace existing then create at index 0
     if sheet_name in [ws_.title for ws_ in wb.worksheets]:
         wb.remove(wb[sheet_name])
     ws = wb.create_sheet(title=sheet_name, index=0)
@@ -96,7 +105,15 @@ def build_excel_sheet0_summary(
     # ----- Section: Data -----
     ws.cell(row=row, column=1, value="Data").font = HEADER
     ws.cell(row=row, column=1).alignment = TOPLEFT_WRAP
+
+    # B1: Crop: <name> (blue, size 14)
+    crop = _extract_crop_from_experiment_name(experiment_name)
+    c_b1 = ws.cell(row=1, column=2, value=f"Crop: {crop}")
+    c_b1.font = Font(color="0000FF", size=14, bold=False)
+    c_b1.alignment = Alignment(horizontal="left", vertical="top")
+
     row += 2
+
     for title, desc in DATA_LINES:
         name_cell = ws.cell(row=row, column=1, value=title)
         name_cell.font = NAME_RED_BOLD
@@ -200,33 +217,37 @@ def build_excel_sheet0_summary(
     row += 1  # blank line
 
     # Totals (labels bold; numbers not bold)
-    # Total # Pixels
     ws.cell(row=row, column=1, value="Total # Pixels").font = BOLD
     t_pix = ws.cell(row=row, column=2, value=f"=SUM(B{start_table_row}:B{end_table_row})")
     t_pix.font = NOT_BOLD; t_pix.alignment = RIGHT; t_pix.number_format = "#,##0"
     row += 1
 
-    # Total # of Farmers
     ws.cell(row=row, column=1, value="Total # of Farmers").font = BOLD
     t_far = ws.cell(row=row, column=2, value=f"=SUM(C{start_table_row}:C{end_table_row})")
     t_far.font = NOT_BOLD; t_far.alignment = RIGHT; t_far.number_format = "#,##0"
     row += 1
 
-    # Total Sum Insured
     ws.cell(row=row, column=1, value="Total Sum Insured").font = BOLD
     t_sumins = ws.cell(row=row, column=2, value=f"=SUM(D{start_table_row}:D{end_table_row})")
     t_sumins.font = NOT_BOLD; t_sumins.alignment = RIGHT; t_sumins.number_format = "#,##0"
     row += 1
 
-    # Expected Loss (% sum insured) — from Sheet 3 only:
-    # EL = SUM(Avg Payout by pixel row across F:Last) / SUM(Sum Insured row across F:Last)
-    #   avg_row_ref above finds the row index where E = "Average Payout by pixel"
+    # Expected Loss (% sum insured) from Sheet 3
     avg_payout_sum = f"SUM(INDEX('3. Payout Amounts'!$F:${last_letter},{avg_row_ref},0))"
     suminsured_sum = f"SUM('3. Payout Amounts'!$F${SUMINS_ROW_S3}:'3. Payout Amounts'!${last_letter}${SUMINS_ROW_S3})"
-
     ws.cell(row=row, column=1, value="Expected Loss (% sum insured)").font = BOLD
     el = ws.cell(row=row, column=2, value=f"=IFERROR({avg_payout_sum}/{suminsured_sum},\"\")")
     el.font = NOT_BOLD; el.alignment = RIGHT; el.number_format = "0.0%"
+    row += 2  # spacer before data sources
+
+    # ----- Final Section: Data sources -----
+    ws.cell(row=row, column=1, value="Data sources").font = HEADER
+    ws.cell(row=row, column=1).alignment = TOPLEFT
+    row += 2
+
+    ws.cell(row=row, column=1, value="1. Precipitation: CHIRPS").alignment = TOPLEFT
+    row += 1
+    ws.cell(row=row, column=1, value="2. Temperature: ERA5_Land").alignment = TOPLEFT
 
     # Freeze panes
     ws.freeze_panes = "A4"

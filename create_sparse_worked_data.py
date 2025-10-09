@@ -4,7 +4,36 @@ import xarray as xr
 import os
 from pathlib import Path
 import warnings
+import re
 warnings.filterwarnings('ignore')
+
+def _find_planting_file(root_dir: str) -> str | None:
+    for dp, _, fs in os.walk(root_dir):
+        for fn in fs:
+            low = fn.lower()
+            if low.endswith((".nc", ".nc4")) and ("plant" in low or "pldate" in low):
+                return os.path.join(dp, fn)
+    return None
+
+def _planting_start_year_from_folder(input_folder: str) -> int | None:
+    """Return first calendar year present in planting dataset."""
+    p = _find_planting_file(input_folder)
+    if not p:
+        print("[warn] planting file not found in", input_folder)
+        return None
+    ds = xr.open_dataset(p, decode_times=False)
+    try:
+        t = ds["time"]
+        # If already datetime64[ns], use it directly
+        if np.issubdtype(t.dtype, np.datetime64):
+            y0 = pd.to_datetime(t.values[0]).year
+            return int(y0)
+        # else try to parse from units like 'days since 1982-01-01 ...'
+        units = str(t.attrs.get("units", "")).lower()
+        m = re.search(r"(\d{4})\s*-\s*\d{1,2}\s*-\s*\d{1,2}", units)
+        return int(m.group(1)) + int(ds.time.values[0]) if m else None
+    finally:
+        ds.close()
 
 def find_minimal_bounding_box(locations_file, grid_step=0.1):
     """
@@ -111,7 +140,7 @@ def standardize_coord_names(ds):
     
     return ds
 
-def process_nc4_file(input_file, output_file, bbox, worked_mask, lat_coords, lon_coords, compression_level=9):
+def process_nc4_file(input_file, output_file, bbox, worked_mask, lat_coords, lon_coords, compression_level=9, planting_start_year=None):
     """
     Process a single NC4 file to create sparse array
     """
@@ -132,6 +161,61 @@ def process_nc4_file(input_file, output_file, bbox, worked_mask, lat_coords, lon
         print(f"    Dimensions: {list(ds.dims.keys())}")
         print(f"    Data variables: {list(ds.data_vars.keys())}")
         
+        # Trim time dimension if planting_start_year is provided and time coordinate exists
+        if planting_start_year is not None and "time" in ds.coords:
+            base = os.path.basename(input_file).lower()
+            
+            # Handle daily weather data (tasmax, tasmin, pr, chirps, etc.)
+            if any(k in base for k in ("tasmax", "tasmin", "pr","chirps","tempmax","tempmin")):
+                # time is already datetime64[ns] per your note
+                # 1) Ensure sorted & unique time
+                ds = ds.sortby("time")
+                if hasattr(ds.get_index("time"), "duplicated"):
+                    ds = ds.sel(time=~ds.get_index("time").duplicated())
+                ds = xr.decode_cf(ds, use_cftime=False)  # yields numpy datetime64 when possible
+                ds  = ds.sortby("time")                   # good hygiene
+                # 2) Do the range in a single inclusive slice
+                start_year = int(planting_start_year) - 1
+                cutoff = f"{start_year}-01-01"
+                end_year = 2022
+                end_cutoff = f"{end_year+1}-06-30"
+                before = ds.dims.get("time", 0)
+                t = ds["time"]
+                mask = (t >= np.datetime64(cutoff)) & (t <= np.datetime64(end_cutoff))
+                ds = ds.sel(time=mask)
+                after = ds.dims.get("time", 0)
+                print(f"  trimmed {base}: time {before} → {after} (>= {planting_start_year}-01-01)")
+            
+            # Handle yearly data (planting dates, yield, etc.)
+            elif any(k in base for k in ("plant", "pldate", "yield", "harvest")):
+                t = ds["time"]
+                units_str = str(t.attrs.get("units", "")).lower()
+                
+                # Check if time units are in years
+                if "year" in units_str:
+                    before = ds.dims.get("time", 0)
+                    
+                    # Parse the reference year from units like "years since 1981" or just "years"
+                    ref_year_match = re.search(r"years?\s+since\s+(\d{4})", units_str)
+                    if ref_year_match:
+                        # "years since YYYY" format
+                        ref_year = int(ref_year_match.group(1))
+                        # time values are offsets from reference year
+                        actual_years = ref_year + t.values.astype(int)
+                    else:
+                        # Assume time values are absolute years (e.g., 1981, 1982, ...)
+                        actual_years = t.values.astype(int)
+                    
+                    # Filter to years between planting_start_year - 1 and 2022
+                    start_year = int(planting_start_year) - 1
+                    end_year = 2022
+                    
+                    year_mask = (actual_years >= start_year) & (actual_years <= end_year)
+                    ds = ds.isel(time=year_mask)
+                    
+                    after = ds.dims.get("time", 0)
+                    print(f"  trimmed {base}: time {before} → {after} years (from {start_year} to {end_year})")
+
         # Standardize coordinate names
         ds = standardize_coord_names(ds)
         
@@ -293,7 +377,14 @@ def create_sparse_arrays(locations_file, input_folder, output_folder, grid_step=
     successful = 0
     total_original_size = 0
     total_compressed_size = 0
-    
+
+    # Determine planting start year for potential trimming      
+    planting_start_year = _planting_start_year_from_folder(input_folder)
+    if planting_start_year is not None:
+        print(f"[info] Trimming weather files to years >= {planting_start_year}")
+    else:
+        print("[warn] Could not determine planting start year; will not trim weather files.")
+
     for nc4_file in nc4_files:
         # Resolve shortcut if necessary
         if nc4_file.suffix.lower() == '.lnk':
@@ -310,11 +401,19 @@ def create_sparse_arrays(locations_file, input_folder, output_folder, grid_step=
         original_size = os.path.getsize(nc4_file) / (1024*1024)  # MB
         total_original_size += original_size
         
-        if process_nc4_file(nc4_file, output_file, bbox, worked_mask, lat_coords, lon_coords, compression_level):
-            successful += 1
-            compressed_size = os.path.getsize(output_file) / (1024*1024)  # MB
-            total_compressed_size += compressed_size
-            print(f"  ✓ Successfully created sparse array")
+        if process_nc4_file(
+            input_file=nc4_file,
+            output_file=output_file,
+            bbox=bbox,
+            worked_mask=worked_mask,
+            lat_coords=lat_coords,
+            lon_coords=lon_coords,
+            compression_level=compression_level,
+            planting_start_year=planting_start_year):  # <<< NEW
+                successful += 1
+                compressed_size = os.path.getsize(output_file) / (1024*1024)  # MB
+                total_compressed_size += compressed_size
+                print(f"  ✓ Successfully created sparse array")
         else:
             print(f"  ✗ Failed to process file")
     
