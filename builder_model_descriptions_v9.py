@@ -11,8 +11,8 @@ from openpyxl.utils import get_column_letter
 # === Layout to match Sheet 1 ===
 col_label = 5          # E
 first_data_col = 6     # F
-row_title = 2
-row_meta_start = 3
+row_title = 1
+row_meta_start = 2
 
 # === Area color palette (copied from Sheet 1) ===
 AREA_COLORS_HEX = {
@@ -148,8 +148,8 @@ def _build_r2_map(meta_dir: str, pixel_order: List[int]) -> Dict[int, float]:
                 continue
         cols = {c.strip().lower(): c for c in d.columns}
         # Accept 'r2' or 'r^2' variants
-        print("calculating for R2-Pred (change to R2 later!!!")
-        r2col = cols.get("r2-pred") or cols.get("r^2") or cols.get("r_2")
+        #print("calculating for R2-Pred (change to R2 later!!!")
+        r2col = cols.get("r2") or cols.get("r^2") or cols.get("r_2")
         if not r2col:
             # Try fuzzy match
             for c in d.columns:
@@ -168,7 +168,7 @@ def _build_r2_map(meta_dir: str, pixel_order: List[int]) -> Dict[int, float]:
 def build_model_descriptions(
     df: pd.DataFrame,
     wb: Optional[Workbook] = None,
-    sheet_name: str = "7. Model Descriptions",
+    sheet_name: str = "Model Descriptions",
     descriptions_dir: Optional[str] = None,
     pixel_meta_csv: str = "village_pixel_matches_maize-nkasi.csv",
     meta_dir: Optional[str] = None,
@@ -182,7 +182,7 @@ def build_model_descriptions(
         ws = wb[sheet_name]
         wb.remove(ws)
     ws = wb.create_sheet(title=sheet_name)
-
+    print(f"Building sheet '{sheet_name}' in workbook")
     left = Alignment(horizontal="left")
     center = Alignment(horizontal="center")
     bold = Font(bold=True)
@@ -196,17 +196,19 @@ def build_model_descriptions(
     # Pixel order and metadata strictly from CSV
     meta = _load_pixel_meta(pixel_meta_csv)
     pixel_order: List[int] = list(meta["pixel"].dropna().astype(int).tolist())
-
+    print(f"Loaded metadata for {len(meta)} pixels from {pixel_meta_csv}")
     # Pre-read segments per pixel
-    base_dir = Path(descriptions_dir or r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_plaintext-description")
+    base_dir = Path(descriptions_dir) #or r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_plaintext-description"
+    print(base_dir)
     segs_by_pix: Dict[int, List[Dict[str, str]]] = {}
     for pix in pixel_order:
         fpath = base_dir / f"pixel{pix:04d}.txt"
         text = fpath.read_text(encoding="utf-8", errors="ignore") if fpath.exists() else ""
         segs_by_pix[pix] = _parse_segments(text)
-
+    print(segs_by_pix[0])
+    print(f"Loaded segments for {len(segs_by_pix)} pixels")
     # R2 map using per-pixel CSVs
-    meta_base = meta_dir or r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_meta"
+    meta_base = meta_dir #or r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_meta"
     r2_map = _build_r2_map(meta_base, pixel_order)
 
     # Metadata block labels
@@ -215,7 +217,7 @@ def build_model_descriptions(
         r = row_meta_start + idx
         ws.cell(row=r, column=col_label, value=lab).font = bold
         ws.cell(row=r, column=col_label).alignment = left
-
+    print(f"Writing {len(pixel_order)} pixels to sheet")
     # Write column-wise values
     for j, pix in enumerate(pixel_order):
         col = first_data_col + j
@@ -292,14 +294,126 @@ def build_model_descriptions(
         col = first_data_col + j
         ws.cell(row=r2_row_index, column=col, value=r2_map.get(pix)).alignment = Alignment(horizontal="center")
 
-    # Resizing & freeze
-    for letter in ("A","B","C","D"):
-        ws.column_dimensions[letter].width = 1.0
     ws.column_dimensions["E"].width = 18.0
     last_col = first_data_col + len(pixel_order) - 1
     for c in range(first_data_col, last_col + 1):
         ws.column_dimensions[get_column_letter(c)].width = 21.4
-    ws.freeze_panes = "F10"
+    ws.freeze_panes = "F9"
 
+
+    # === Variable Definitions block (added two lines below R2) ===
+    # Ensure Border/Side are available
+    from openpyxl.styles import Border, Side
+
+    var_header_row = r2_row_index + 2
+    header_cell = ws.cell(row=var_header_row, column=col_label, value="Variable Definitions")
+    header_cell.font = Font(bold=True)
+    header_cell.alignment = Alignment(horizontal="left")
+    header_cell.fill = PatternFill(fill_type="solid", start_color="FFFF00", end_color="FFFF00")
+
+    # Start listing variables on the next row
+    start_row = var_header_row + 1
+
+    # Long-name variables and concise descriptions (no abbreviations shown)
+    variables = [
+        ("Cumulative precipitation",
+         "Total precipitation summed over the chosen window (mm). "
+         "Higher values indicate wetter conditions during that period."),
+        ("Dryspell total deficit",
+         "Dryness score that sums how much each rolling 6-day precipitation total falls below 4 mm/day (mm). "
+         "Bigger totals reflect longer and/or deeper dry spells."),
+        ("Cumulative water balance",
+         "Sum over the window of daily water balance in mm. "
+         "Positive totals imply a net moisture surplus; negative totals imply a net deficit."),
+        ("Cumulative heat stress",
+         "Accumulated hot-day score based on how far daily maximum temperature exceeds crop-specific critical/limit temperatures (unitless). "
+         "Each hot day contributes a fractional amount; larger totals mean stronger heat stress exposure."),
+        ("Cumulative cold days",
+         "Number of days when daily minimum temperature is below a crop-specific threshold (days). "
+         "Higher counts indicate greater cold exposure risk."),
+        ("Cumulative hot & dry days (SPI-30)",
+         "Days that are hot (above the crop’s critical temperature) and simultaneously dry per SPI on a 30-day scale (days). "
+         "Captures short-term hot-dry stress based on precipitation anomalies."),
+        ("Cumulative hot & dry days (SPEI-30)",
+         "Days that are hot and dry per SPEI on a 30-day scale (days). "
+         "SPEI reflects anomalies of water balance (precipitation − PET), so it includes heat-driven demand."),
+        ("Cumulative hot & dry days (SPEI-90)",
+         "Days that are hot and dry per SPEI on a 90-day scale (days). "
+         "Emphasizes more persistent, seasonal-scale hot-dry stress."),
+        ("Cumulative not-humid & hot days",
+         "Days that are hot (above the crop’s critical temperature) under low-humidity conditions (days). "
+         "Targets heat stress when air moisture is limited."),
+        ("Water excess (SPEI-90)",
+         "Sum of positive SPEI-90 anomalies over the window (standardized units). "
+         "Higher totals indicate more sustained wetter-than-normal conditions."),
+        ("Mean temperature",
+         "Average of (Tmin + Tmax)/2 over the window, reported in the same units as the temperature data (e.g., °C). "
+         "Summarizes typical thermal conditions during the period."),
+    ]
+
+    # Glossary items appended at the bottom
+    glossary = [
+        ("SPI (Standardized Precipitation Index)",
+         "Standardized anomaly of precipitation over a chosen timescale (e.g., 30/90 days). "
+         "Values < 0 indicate drier-than-normal; values > 0 indicate wetter-than-normal."),
+        ("SPEI (Standardized Precipitation–Evapotranspiration Index)",
+         "Standardized anomaly of climatic water balance (precipitation − PET) over a chosen timescale. "
+         "Values < 0 indicate dryness; values > 0 indicate wetness; includes heat-driven atmospheric demand via PET."),
+        ("Water balance (wb)",
+         "Daily difference between precipitation and potential evapotranspiration (mm/day). "
+         "Positive values indicate a moisture surplus; negative values indicate a moisture deficit."),
+        ("Potential evapotranspiration (PET)",
+         "Atmospheric evaporative demand (mm/day)—the amount that would evaporate and transpire from a well-watered surface "
+         "given weather conditions (temperature, radiation/daylength, wind, humidity). Used with precipitation to form water balance."),
+    ]
+
+    # Layout: long name in column E; description spans merged F:H (three columns) and two rows.
+    row_ptr = start_row
+    for name, desc in variables:
+        # Merge name cell over two rows in column E
+        ws.merge_cells(start_row=row_ptr, start_column=col_label, end_row=row_ptr+1, end_column=col_label)
+        name_cell = ws.cell(row=row_ptr, column=col_label, value=name)
+        name_cell.font = Font(bold=True)
+        name_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+        # Merge description block over F:H and two rows
+        ws.merge_cells(start_row=row_ptr, start_column=col_label+1, end_row=row_ptr+1, end_column=col_label+3)
+        desc_cell = ws.cell(row=row_ptr, column=col_label+1, value=desc)
+        desc_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+        # advance two rows per entry
+        row_ptr += 2
+
+    
+    # "Glossary" subtitle row with thick top border directly (no blank row)
+    gloss_header_row = row_ptr
+    ws.merge_cells(start_row=gloss_header_row, start_column=col_label, end_row=gloss_header_row, end_column=col_label+3)
+    for col_offset in range(0, 4):  # E..H
+        cell = ws.cell(row=gloss_header_row, column=col_label + col_offset)
+        cell.border = Border(top=Side(style="thick"))
+
+    gh_cell = ws.cell(row=gloss_header_row, column=col_label, value="Glossary")
+    gh_cell.font = Font(bold=True, italic=True)
+    gh_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    # Glossary entries (same merged layout) start immediately on the next row
+    row_ptr = gloss_header_row + 1
+
+    # Glossary entries (same merged layout)
+    row_ptr = gloss_header_row + 1
+    for name, desc in glossary:
+        ws.merge_cells(start_row=row_ptr, start_column=col_label, end_row=row_ptr+1, end_column=col_label)
+        name_cell = ws.cell(row=row_ptr, column=col_label, value=name)
+        name_cell.font = Font(bold=True)
+        name_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+        ws.merge_cells(start_row=row_ptr, start_column=col_label+1, end_row=row_ptr+1, end_column=col_label+3)
+        desc_cell = ws.cell(row=row_ptr, column=col_label+1, value=desc)
+        desc_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+
+        row_ptr += 2
     _autosize(ws, 1, last_col)
+    # Resizing & freeze
+    for letter in ("A","B","C","D"):
+        ws.column_dimensions[letter].width = 1.0
     return wb

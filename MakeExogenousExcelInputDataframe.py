@@ -21,8 +21,8 @@ Output: df_final (pandas DataFrame) with metadata + long timeseries (Year, Yield
 
 # --- Configure input paths (adjust if needed) ---
 PATH_VILL = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv")
-PATH_THRESH = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv")
-PATH_TS = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Conservative_timeseries.csv")
+PATH_THRESH = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputGDD1800_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv")
+PATH_TS = Path(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputGDD1800_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-timeseries.csv")
 
 def _ensure_pixel_col(df: pd.DataFrame) -> pd.DataFrame:
     # Normalize pixel column name to 'Pixel' if possible
@@ -79,13 +79,31 @@ def load_and_merge() -> pd.DataFrame:
 
     # Read timeseries
     df_ts = pd.read_csv(PATH_TS, low_memory=False)
-
-    # Detect year column (if present). If none, assume rows correspond to 1981..2022 in order.
+    
+    # Report NaN values per year (row) before filling
     year_col = _find_year_column(df_ts)
     if year_col is None:
+        # If no year column, assume rows are years starting from 1981
         nrows = len(df_ts)
-        start_year = 1982
+        start_year = 1981
         years = list(range(start_year, start_year + nrows))
+    else:
+        years = pd.to_numeric(df_ts[year_col], errors='coerce').astype('Int64').tolist()
+    
+    for idx, year in enumerate(years):
+        if idx < len(df_ts):
+            row_nan_count = df_ts.iloc[idx].isna().sum()
+            if year_col and df_ts.columns[0] == year_col:
+                # Exclude year column from count
+                row_nan_count = df_ts.iloc[idx, 1:].isna().sum()
+            if row_nan_count > 0:
+                print(f"{year}: {row_nan_count} NaNs filled with 0 yields")
+    
+    # Fill NaN values with 0 in timeseries data
+    df_ts = df_ts.fillna(0)
+
+    # Detect year column (if present). If none, assume rows correspond to 1981..2022 in order.
+    if year_col is None:
         df_ts = df_ts.copy()
         df_ts.insert(0, 'Year', years)
         year_col = 'Year'

@@ -14,7 +14,7 @@ from builder_excel_sheet6_formulas_fmt2 import build_excel_sheet6
 from builder_excel_sheet7_8_9_formulas import build_excel_sheet7_chartdata, build_excel_sheet8_area_payout_chart, augment_sheet7_with_percentage_block, build_excel_sheet9_area_payout_pct_chart
 from builder_excel_sheet10_formulas import build_excel_sheet10_diversification_chart
 from builder_summary_sheet import build_excel_sheet0_summary
-from builder_model_descriptions_v6 import build_model_descriptions
+from builder_model_descriptions_v9 import build_model_descriptions
 #from builder_df_pixel_sheet import build_df_pixel_sheet
 
 def add_chart_sheet(wb: Workbook, chart_func, df_data, df_final=None, sheet_name: str = "Chart"):
@@ -89,15 +89,19 @@ def build_final_report(out_path: str = "output/final_report.xlsx") -> str:
 
     # 11) summary sheet 
     wb = build_excel_sheet0_summary(wb,experiment_name="CalendarDays180_Maize_1982_2021_SPARSE")
-    
+
     wb = build_model_descriptions(
         df_final,
         wb=wb,
         sheet_name="Model Descriptions",
-        descriptions_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_plaintext-description",
+        #descriptions_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays140_Maize_1981_2022_SPARSE\ThreeVariableContiguous-deliverable-model_plaintext-description",
+        #pixel_meta_csv=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv",
+        #meta_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays140_Maize_1981_2022_SPARSE\ThreeVariableContiguous-deliverable-model_meta"
+        descriptions_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputBestModel-Maize_1981_2022_SPARSE\BestModel-deliverable-model_plaintext-description",
         pixel_meta_csv=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\village_pixel_matches_maize-nkasi.csv",
-        meta_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-deliverable-model_meta"
+        meta_dir=r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputBestModel-Maize_1981_2022_SPARSE\BestModel-deliverable-model_meta"
     )
+
 
     # 12) DataFrame Pixel Sheet
     #df_pred = pd.read_csv(r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_PredictionMaize_1982_2022_SPARSE\predicted_2022.csv")  # or any equivalent DataFrame

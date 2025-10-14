@@ -82,7 +82,7 @@ def match_villages_to_pixels(highlands_file, metadata_file, output_file):
 if __name__ == "__main__":
     result = match_villages_to_pixels(
         r'C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\PolicyPilot\iwi-policy-pilot\data\NKASI - MAIZE - revised 2025.xlsx',
-        r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1982_2021_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
+        r"C:\Users\danie\NecessaryM1InternshipCode\ProjectRice\OutputCalendarDays180_Maize_1981_2022_SPARSE\ThreeVariableContiguous-SyntheticYield-Optimistic-metadata.csv",
         r'.\data\village_pixel_matches_maize-nkasi.csv'
     )
     print(f"Produced {len(result)} rows (one per unique Pixel).")
